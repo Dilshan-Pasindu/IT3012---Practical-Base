@@ -37,48 +37,44 @@ class ModelBasedAgent:
     to remember past actions and avoid getting stuck in loops."""
 
     def __init__(self):
-        # Internal state: memory of past actions taken
+        # Internal state: memory of sweep direction and exploration state
         self.last_action = None
         self.action_history = []
+        self.horizontal_direction = 'Right'  # Current sweep direction (memory)
+        self.state = 'sweep'  # Exploration state: 'sweep' or 'step_up' (memory)
 
     def sense_and_act(self, percept: dict) -> str:
-        actions = ['Up', 'Down', 'Left', 'Right']
+        directions = ['Up', 'Down', 'Left', 'Right']
 
         # Transition Model: Record the last action into history
         if self.last_action is not None:
             self.action_history.append(self.last_action)
 
-        # Sensor Model: Process current percept and query memory
+        # Sensor Model: Process current percept and query internal memory state
 
-        # Rule 1: IF food_here THEN collect
-        if percept.get('food_here'):
-            action = 'Up'
-            self.last_action = action
-            return action
-
-        # Rule 2: IF wall_ahead THEN check memory to choose a different direction
         if percept.get('wall_ahead'):
-            # Query memory: if last action was already a turn, try a different one
-            if self.last_action == 'Left':
-                action = 'Right'
-            elif self.last_action == 'Right':
-                action = 'Down'
-            elif self.last_action == 'Down':
+            if self.state == 'sweep':
+                # Wall/boundary hit while sweeping → step up to next row (memory update)
+                self.state = 'step_up'
                 action = 'Up'
+            elif self.state == 'step_up':
+                # Wall while stepping up (top boundary) → reverse sweep using memory
+                self.horizontal_direction = 'Left' if self.horizontal_direction == 'Right' else 'Right'
+                self.state = 'sweep'
+                action = self.horizontal_direction
             else:
-                action = 'Left'
-
-            self.last_action = action
-            return action
-
-        # Rule 3: ELSE move forward, but check memory for repetition
-        # Detect if the agent is repeating the same action (loop detection)
-        if len(self.action_history) >= 3 and len(set(self.action_history[-3:])) == 1:
-            # Agent is stuck repeating — choose a different direction from memory
-            available = [a for a in actions if a != self.last_action]
-            action = random.choice(available)
+                # Fallback: use memory to choose a different direction
+                available = [d for d in directions if d != self.last_action]
+                action = random.choice(available)
         else:
-            action = 'Up'
+            if self.state == 'step_up':
+                # Successfully stepped up → reverse direction from memory and sweep
+                self.horizontal_direction = 'Left' if self.horizontal_direction == 'Right' else 'Right'
+                self.state = 'sweep'
+                action = self.horizontal_direction
+            else:
+                # Continue sweeping in current direction from memory
+                action = self.horizontal_direction
 
         self.last_action = action
         return action
