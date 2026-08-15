@@ -10,6 +10,7 @@ class VisualGridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_direction = 'Right'  # Agent's current facing direction
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
@@ -35,23 +36,57 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Generate toxic traps avoiding agent start, walls, and food
+        self.toxic_traps = set()
+        num_traps = 3
+        while len(self.toxic_traps) < num_traps:
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap_pos = (tx, ty)
+            if trap_pos != (0, 0) and trap_pos not in self.walls and trap_pos not in self.food_positions:
+                self.toxic_traps.add(trap_pos)
+
         self.score = 0
         self.steps = 0
         self.collision = False
 
     def get_percept(self) -> dict:
+        # Check the cell ahead based on the agent's current facing direction
+        ax, ay = self.agent_pos
+        ahead_x, ahead_y = ax, ay
+        at_boundary = False
+
+        if self.agent_direction == 'Up':
+            if ay >= self.height - 1:
+                at_boundary = True
+            else:
+                ahead_y = ay + 1
+        elif self.agent_direction == 'Down':
+            if ay <= 0:
+                at_boundary = True
+            else:
+                ahead_y = ay - 1
+        elif self.agent_direction == 'Left':
+            if ax <= 0:
+                at_boundary = True
+            else:
+                ahead_x = ax - 1
+        elif self.agent_direction == 'Right':
+            if ax >= self.width - 1:
+                at_boundary = True
+            else:
+                ahead_x = ax + 1
+
+        wall_ahead = at_boundary or (ahead_x, ahead_y) in self.walls
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': wall_ahead,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
         }
 
     def execute_action(self, action: str):
         self.steps += 1
+        self.agent_direction = action  # Update facing direction
         new_pos = list(self.agent_pos)
 
         if action == 'Up':
@@ -72,6 +107,10 @@ class VisualGridHuntGame:
         if tuple_pos in self.food_positions:
             self.food_positions.remove(tuple_pos)
             self.score += 20
+
+        # Check if agent stepped on a toxic trap
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -145,6 +184,14 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
+
+        # Draw toxic traps as purple shapes
+        for tx, ty in self.env.toxic_traps:
+            offset = self.cell_size * 0.2
+            x1 = tx * self.cell_size + offset
+            y1 = (self.env.height - 1 - ty) * self.cell_size + offset
+            self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#9333ea",
+                                         outline="#7e22ce")
 
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
