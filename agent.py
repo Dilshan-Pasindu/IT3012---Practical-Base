@@ -1,5 +1,6 @@
 # agent.py
 import random
+import math
 
 
 class GreedyGridAgent:
@@ -81,12 +82,12 @@ class ModelBasedAgent:
 
 
 class SearchAgent:
-    """A Goal-Based/Planning Agent that uses BFS, DFS, or UCS
+    """A Goal-Based/Planning Agent that uses BFS, DFS, UCS, or A*
     to find optimal paths to food pellets before taking physical actions."""
 
     def __init__(self):
         self.plan = []  # Stores the sequence of actions to execute
-        self.active_algo = 'BFS'  # Change to 'DFS' or 'UCS' to compare
+        self.active_algo = 'AStar'  # Change to 'BFS', 'DFS', 'UCS', or 'AStar' to compare
 
     # ------------------------------------------------------------------ #
     #  Helper: get valid neighbouring states from a given position
@@ -111,6 +112,17 @@ class SearchAgent:
                 neighbours.append((action, (nx, ny)))
 
         return neighbours
+
+    # ------------------------------------------------------------------ #
+    #  Heuristic Functions for Informed Search
+    # ------------------------------------------------------------------ #
+    def manhattan_distance(self, pos, goal):
+        """Calculate Manhattan distance: h(n) = |x1 - x2| + |y1 - y2|"""
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        """Calculate Euclidean distance: h(n) = sqrt((x1-x2)^2 + (y1-y2)^2)"""
+        return math.sqrt((pos[0] - goal[0]) ** 2 + (pos[1] - goal[1]) ** 2)
 
     # ------------------------------------------------------------------ #
     #  BFS — Breadth-First Search  (FIFO Queue)
@@ -198,6 +210,51 @@ class SearchAgent:
         return []  # No path found
 
     # ------------------------------------------------------------------ #
+    #  A* Search  (Priority Queue ordered by f(n) = g(n) + h(n))
+    # ------------------------------------------------------------------ #
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        """Find a path from start to goal using A* Search.
+        Uses a min-heap priority queue ordered by f(n) = g(n) + h(n).
+        Supports 'manhattan' and 'euclidean' heuristic types."""
+        import heapq
+
+        # Select the heuristic function
+        if heuristic_type == 'euclidean':
+            heuristic = self.euclidean_distance
+        else:
+            heuristic = self.manhattan_distance
+
+        frontier = []                           # Priority queue (min-heap)
+        reached_states = set()                  # Track visited states
+
+        # Initial state: f(n) = g(n) + h(n), g(n) = 0
+        h_start = heuristic(start_pos, goal_pos)
+        f_start = 0 + h_start
+        heapq.heappush(frontier, (f_start, 0, start_pos, []))  # (f_cost, g_cost, current_pos, path_taken)
+
+        while frontier:
+            f_cost, g_cost, current_pos, path_taken = heapq.heappop(frontier)
+
+            # Goal test
+            if current_pos == goal_pos:
+                return path_taken
+
+            # Skip if already visited
+            if current_pos in reached_states:
+                continue
+            reached_states.add(current_pos)
+
+            # Expand neighbours
+            for action, neighbour in self._get_neighbours(current_pos, grid_size, walls):
+                if neighbour not in reached_states:
+                    g_new = g_cost + 1
+                    h_new = heuristic(neighbour, goal_pos)
+                    f_new = g_new + h_new
+                    heapq.heappush(frontier, (f_new, g_new, neighbour, path_taken + [action]))
+
+        return []  # No path found
+
+    # ------------------------------------------------------------------ #
     #  Main agent loop
     # ------------------------------------------------------------------ #
     def sense_and_act(self, percept: dict) -> str:
@@ -229,6 +286,8 @@ class SearchAgent:
                 self.plan = self.dfs_search(agent_pos, closest_food, grid_size, walls)
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(agent_pos, closest_food, grid_size, walls)
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(agent_pos, closest_food, walls, grid_size)
 
             # Fallback if search finds no path
             if not self.plan:
