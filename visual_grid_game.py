@@ -87,6 +87,7 @@ class VisualGridHuntGame:
             'grid_size': (self.width, self.height),
             'walls': list(self.walls),
             'all_food': list(self.food_positions),
+            'remaining_food': list(self.food_positions),
         }
 
     def execute_action(self, action: str):
