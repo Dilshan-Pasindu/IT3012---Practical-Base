@@ -267,7 +267,7 @@ class SearchAgent:
             agent_pos = percept['agent_pos']
             grid_size = percept['grid_size']
             walls = set(percept['walls'])
-            all_food = percept['all_food']
+            all_food = percept.get('remaining_food', percept.get('all_food', []))
 
             if not all_food:
                 # No food left — move randomly
@@ -294,3 +294,14 @@ class SearchAgent:
                 return random.choice(['Up', 'Down', 'Left', 'Right'])
 
         return self.plan.pop(0)
+
+
+if __name__ == "__main__":
+    # Testing Checkpoint
+    agent = SearchAgent()
+    start = (0, 0)
+    goal = (3, 4)
+    manhattan = agent.manhattan_distance(start, goal)
+    euclidean = agent.euclidean_distance(start, goal)
+    print(f"Manhattan distance between {start} and {goal}: {manhattan}")
+    print(f"Euclidean distance between {start} and {goal}: {euclidean}")
